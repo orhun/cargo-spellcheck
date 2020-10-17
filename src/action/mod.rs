@@ -10,7 +10,6 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 pub mod bandaid;
-pub mod bandaidset;
 pub mod interactive;
 
 pub(crate) use bandaid::*;
@@ -82,7 +81,6 @@ impl From<BandAid> for Patch {
 /// Inserting multiple times at a particular `LineColumn` is ok,
 /// but replacing overlapping `Span`s of the original source is not.
 ///
-<<<<<<< HEAD
 /// This function is not concerend with _any_ semantics or comments or
 /// whatsoever at all.
 fn correct_lines<'s, II, I>(patches: II, source_buffer: String, mut sink: impl Write) -> Result<()>
@@ -158,127 +156,6 @@ where
             let cc_end = match upcoming {
                 Patch::Replace { replace_span, .. } => replace_span.start,
                 Patch::Insert { insert_at, .. } => insert_at.clone(),
-=======
-/// [https://github.com/drahnr/cargo-spellcheck/issues/116](Tracking issue).
-fn correct_lines<'s>(
-    mut bandaids: impl Iterator<Item = BandAid>,
-    source: impl Iterator<Item = (usize, String)>,
-    mut sink: impl Write,
-) -> Result<()> {
-    let mut injection_first = true;
-    let mut injection_previous = false;
-
-    let mut nxt: Option<BandAid> = bandaids.next();
-    for (line_number, content) in source {
-        trace!("Processing line {}", line_number);
-        let mut remainder_column = 0_usize;
-        // let content: String = content.map_err(|e| {
-        //     anyhow!("Line {} contains invalid utf8 characters", line_number).context(e)
-        // })?;
-
-        if nxt.is_none() {
-            // no candidates remaining, just keep going
-            sink.write(content.as_bytes())?;
-            sink.write("\n".as_bytes())?;
-            injection_first = true;
-            continue;
-        }
-
-        // If there is no bandaid for this line, write original content
-        // and keep going
-        if let Some(ref bandaid) = nxt {
-            if !bandaid.covers_line(line_number) {
-                sink.write(content.as_bytes())?;
-                sink.write("\n".as_bytes())?;
-                injection_first = true;
-                continue;
-            }
-        }
-
-        let content_len = content.chars().count();
-        let mut drop_entire_line = false;
-        while let Some(bandaid) = nxt.take() {
-            trace!("Applying next bandaid {:?}", bandaid);
-            trace!("where line {} is: >{}<", line_number, content);
-            let (range, replacement) = match &bandaid {
-                BandAid::Replacement(span, repl, variant, indent) => {
-                    drop_entire_line = false;
-                    injection_first = true;
-                    let indentation = " ".repeat(*indent);
-                    let range: Range = span
-                        .try_into()
-                        .expect("Bandaid::Replacement must be single-line. qed");
-                    // FIXME why and how, this is a hack!! XXX
-                    if range.start == 0 {
-                        (range, indentation + &variant.prefix_string() + repl)
-                    } else {
-                        (range, repl.to_owned())
-                    }
-                }
-                BandAid::Injection(location, repl, variant, indent) => {
-                    drop_entire_line = false;
-                    let indentation = " ".repeat(*indent);
-                    let connector = format!(
-                        "{suffix}\n{indentation}{prefix}",
-                        suffix = variant.suffix_string(),
-                        indentation = indentation,
-                        prefix = variant.prefix_string()
-                    );
-                    // for N insertion lines we need to inject N+1, so always add one trailing, and for the first line
-                    // inserted at a particular point add a leading too
-                    injection_previous = injection_first;
-                    let extra = if injection_first {
-                        injection_first = false;
-                        connector.as_str()
-                    } else {
-                        ""
-                    };
-                    let range = location.column..location.column;
-                    (
-                        range,
-                        format!(
-                            "{extra}{repl}{connector}",
-                            repl = repl,
-                            connector = connector,
-                            extra = extra
-                        ),
-                    )
-                }
-                BandAid::Deletion(span) => {
-                    injection_first = true;
-                    let range: Range = span
-                        .try_into()
-                        .expect("Bandaid::Deletion must be single-line. qed");
-                    // TODO: maybe it's better to already have the correct range in the bandaid
-                    drop_entire_line = range.end >= content_len;
-                    (range.start..range.end, "".to_owned())
-                }
-            };
-
-            // write the untouched part for the current line since the previous replacement
-            // (or start of the file if there was not previous one)
-            if range.start > remainder_column {
-                let intermezzo: Range = remainder_column..range.start;
-                // FIXME TODO
-                // The assumption here is we are injecting injections right BEFORE the \n
-                // at the very end of the previous line
-                // but this could screw up royally once we track the existing newline characters (plural!)
-                injection_first = intermezzo.len() > 0;
-                sink.write(dbg!(util::sub_chars(&content, intermezzo)).as_bytes())?;
-            }
-
-            // write the replacement chunk
-            sink.write(replacement.as_bytes())?;
-
-            remainder_column = range.end;
-            nxt = bandaids.next();
-            let complete_current_line = if let Some(ref bandaid) = nxt {
-                // if `nxt` is also targeting the current line, don't complete the line
-                !bandaid.covers_line(line_number)
-            } else {
-                // no more bandaids, complete the current line for sure
-                true
->>>>>>> 1853eb8... workaround: an initial hack to show what would be needed to make it work
             };
 
             // do not write anything
@@ -298,22 +175,12 @@ fn correct_lines<'s>(
                     break 'cc;
                 }
 
-<<<<<<< HEAD
                 cc_end_byte_offset = byte_offset + c.len_utf8();
 
                 log::trace!(target: TARGET, "copy[{}]: >{}<", _idx, c.escape_debug());
 
                 let _ = source_iter.next();
                 // we need to drag this one behind, since...
-=======
-                if !injection_previous && !drop_entire_line {
-                    sink.write("\n".as_bytes())?;
-                }
-                // break the inner loop
-                break;
-                // } else {
-                // next suggestion covers same line
->>>>>>> 1853eb8... workaround: an initial hack to show what would be needed to make it work
             }
             // in the case we reach EOF here the `cc_end_byte_offset` could never be updated correctly
             std::cmp::min(cc_end_byte_offset, source_buffer.len())
@@ -347,8 +214,6 @@ pub enum Action {
     Check,
     /// Interactively choose from checker provided suggestions.
     Fix,
-    /// Reflow all commants to a given maximum column width.
-    Reflow,
 }
 
 impl Action {
@@ -453,10 +318,10 @@ impl Action {
     pub fn run(self, suggestions: SuggestionSet, config: &Config) -> Result<Finish> {
         match self {
             Self::Check => self.check(suggestions, config),
-            Self::Fix | Self::Reflow => {
+            Self::Fix => {
                 let (picked, user_sel) =
                     interactive::UserPicked::select_interactive(suggestions, config)?;
-                if user_sel == interactiver::UserSelection::Abort {
+                if user_sel == interactive::UserSelection::Abort {
                     Ok(Finish::Abort)
                 } else {
                     let n = picked.total_count();
@@ -481,7 +346,8 @@ mod tests {
                 $bandaids.into_iter().map(|bandaid| Patch::from(bandaid)),
                 $text.to_owned(),
                 &mut sink,
-            ).expect("Line correction must work in unit test!");
+            )
+            .expect("Line correction must work in unit test!");
 
             assert_eq!(String::from_utf8_lossy(sink.as_slice()), $expected);
         };
@@ -608,152 +474,4 @@ Icecream truck"#
         }];
         verify_correction!("A🐢C", patches, "A🐢CQ");
     }
-
-    #[test]
-    fn bandaid_multiline() {
-        let bandaids = vec![
-            BandAid::Replacement(
-                (2_usize, 27..36).try_into().unwrap(),
-                "comments with".to_owned(),
-                CommentVariant::TripleSlash,
-                0_usize,
-            ),
-            BandAid::Replacement(
-                (3_usize, 0..17).try_into().unwrap(),
-                " different multiple".to_owned(),
-                CommentVariant::TripleSlash,
-                0_usize,
-            ),
-            BandAid::Replacement(
-                (3_usize, 18..23).try_into().unwrap(),
-                "words".to_owned(),
-                CommentVariant::TripleSlash,
-                0_usize,
-            ),
-        ];
-        verify_correction!(
-            "
-/// Let's test bandaids on comments
-/// with multiple lines afterwards
-",
-            bandaids,
-            "
-/// Let's test bandaids on comments with
-/// different multiple words afterwards
-"
-        );
-    }
-
-    #[test]
-    fn bandaid_deletion() {
-        let _ = env_logger::Builder::new()
-            .filter(None, log::LevelFilter::Trace)
-            .is_test(true)
-            .try_init();
-        let bandaids = vec![
-            BandAid::Replacement(
-                (2_usize, 27..36).try_into().unwrap(),
-                "comments with multiple words".to_owned(),
-                CommentVariant::TripleSlash,
-                0,
-            ),
-            BandAid::Deletion((3_usize, 0..17).try_into().unwrap()),
-        ];
-        verify_correction!(
-            "
-/// Let's test bandaids on comments
-/// with multiple lines afterwards
-",
-            bandaids,
-            "
-/// Let's test bandaids on comments with multiple words
-"
-        );
-    }
-
-    #[test]
-    fn bandaid_injection() {
-        let bandaids = vec![
-            BandAid::Replacement(
-                (2_usize, 27..36).try_into().unwrap(),
-                "comments with multiple words".to_owned(),
-                CommentVariant::TripleSlash,
-                0,
-            ),
-            BandAid::Injection(
-                LineColumn {
-                    line: 3_usize,
-                    column: 0,
-                },
-                " but still more content".to_owned(),
-                CommentVariant::TripleSlash,
-                0,
-            ),
-        ];
-        verify_correction!(
-            "
-/// Let's test bandaids on comments
-/// with multiple lines afterwards
-",
-            bandaids,
-            "
-/// Let's test bandaids on comments with multiple words
-/// but still more content
-/// with multiple lines afterwards
-"
-        );
-    }
-<<<<<<< HEAD
-=======
-
-    #[test]
-    fn bandaid_macrodoceq_injection() {
-        let _ = env_logger::Builder::new()
-            .filter(None, log::LevelFilter::Trace)
-            .is_test(true)
-            .try_init();
-
-        let bandaids = vec![
-            BandAid::Replacement(
-                (2_usize, 18..24).try_into().unwrap(),
-                "uchen".to_owned(),
-                CommentVariant::MacroDocEq(0),
-                0,
-            ),
-            BandAid::Injection(
-                LineColumn {
-                    line: 2_usize,
-                    column: 24,
-                },
-                "für".to_owned(),
-                CommentVariant::MacroDocEq(0),
-                0,
-            ),
-            BandAid::Injection(
-                LineColumn {
-                    line: 2_usize,
-                    column: 24,
-                },
-                "den".to_owned(),
-                CommentVariant::MacroDocEq(0),
-                0,
-            ),
-            BandAid::Deletion((2_usize, 24..25).try_into().unwrap()),
-            BandAid::Deletion((3_usize, 0..10).try_into().unwrap()),
-        ];
-        verify_correction!(
-            r#"
-#[ doc = "Erdbeerkompott
-          Eisbär"]
-"#,
-            bandaids,
-            r#"
-#[ doc = "Erdbeerkuchen"]
-#[ doc = "für"]
-#[ doc = "den"]
-#[ doc = "Eisbär"]
-"#
-        );
-    }
->>>>>>> 1853eb8... workaround: an initial hack to show what would be needed to make it work
 }
