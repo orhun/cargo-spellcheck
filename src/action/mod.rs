@@ -6,7 +6,6 @@ use log::{debug, trace};
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
-
 use std::path::PathBuf;
 
 pub mod bandaid;
@@ -85,8 +84,8 @@ impl From<BandAid> for Patch {
 /// whatsoever at all.
 fn correct_lines<'s, II, I>(patches: II, source_buffer: String, mut sink: impl Write) -> Result<()>
 where
-    II: IntoIterator<IntoIter = I, Item = BandAid>,
-    I: Iterator<Item = BandAid>,
+    II: IntoIterator<IntoIter = I, Item = Patch>,
+    I: Iterator<Item = Patch>,
 {
     let mut patches = patches.into_iter().peekable();
 
@@ -387,7 +386,11 @@ Icecream truck"#
     }
 
     #[test]
+<<<<<<< HEAD
     fn patch_replace_1() {
+=======
+    fn patch_full() {
+>>>>>>> 04af889... refactor/action: rewrite correct_lines purely based on spans
         let _ = env_logger::Builder::new()
             .filter_level(log::LevelFilter::Trace)
             .is_test(true)
