@@ -85,8 +85,8 @@ impl From<BandAid> for Patch {
 /// whatsoever at all.
 fn correct_lines<'s, II, I>(patches: II, source_buffer: String, mut sink: impl Write) -> Result<()>
 where
-    II: IntoIterator<IntoIter = I, Item = Patch>,
-    I: Iterator<Item = Patch>,
+    II: IntoIterator<IntoIter = I, Item = BandAid>,
+    I: Iterator<Item = BandAid>,
 {
     let mut patches = patches.into_iter().peekable();
 
@@ -274,7 +274,7 @@ impl Action {
         reader.get_mut().read_to_string(&mut content)?;
 
         correct_lines(
-            bandaids.into_iter().map(|x| Patch::from(x)),
+            bandaids.into_iter(),
             content, // FIXME for efficiency, correct_lines should integrate with `BufRead` instead of a `String` buffer
             &mut writer,
         )?;
@@ -343,7 +343,7 @@ mod tests {
             let mut sink: Vec<u8> = Vec::with_capacity(1024);
 
             correct_lines(
-                $bandaids.into_iter().map(|bandaid| Patch::from(bandaid)),
+                $bandaids.into_iter(),
                 $text.to_owned(),
                 &mut sink,
             )
@@ -361,15 +361,15 @@ mod tests {
             .try_init();
 
         let patches = vec![
-            Patch::Replace {
-                replace_span: Span {
+            BandAid {
+                span: Span {
                     start: LineColumn { line: 1, column: 6 },
                     end: LineColumn {
                         line: 2,
                         column: 12,
                     },
                 },
-                replacement: "& Omega".to_owned(),
+                content: "& Omega".to_owned(),
             },
             Patch::Insert {
                 insert_at: LineColumn { line: 3, column: 0 },
